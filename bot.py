@@ -141,20 +141,28 @@ def max_req(method, path, **kw):
 def max_upload(kind, name, data):
     max_kind = "image" if kind == "photo" else "video"
     info = max_req("POST", "/uploads", params={"type": max_kind})
-    resp = requests.post(info["url"], files={"data": (name, data)}, timeout=600)
-    resp.raise_for_status()
+    headers = {"Authorization": MAX_TOKEN} if max_kind == "image" else {}
+    resp = requests.post(info["url"], headers=headers,
+                         files={"data": (name, data)}, timeout=600)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"загрузка {resp.status_code} {resp.text[:300]}")
     if max_kind == "image":
-        return {"type": "image", "payload": resp.json()}
+        photos = resp.json().get("photos") or {}
+        token = next((p.get("token") for p in photos.values() if p.get("token")), None)
+        if not token:
+            raise RuntimeError(f"нет токена в ответе: {resp.text[:300]}")
+        return {"type": "image", "payload": {"token": token}}
     return {"type": "video", "payload": {"token": info["token"]}}
 
 
 def send_max(post, files):
-    attachments = []
+    attachments, problems = [], []
     for kind, name, data in files:
         try:
             attachments.append(max_upload(kind, name, data))
         except Exception as e:
             print(f"  MAX: не удалось загрузить {kind}: {e}")
+            problems.append(kind)
     text = render(post["text"], post["entities"], "html")
     if not text and not attachments:
         print("  MAX: нечего публиковать")
@@ -162,16 +170,22 @@ def send_max(post, files):
     body = {"format": "html", "attachments": attachments}
     if text:
         body["text"] = text
-    for attempt in range(8):  # видео в MAX обрабатывается не сразу
+    if attachments:
+        time.sleep(3)  # MAX обрабатывает загруженные файлы не мгновенно
+    delay = 5
+    for attempt in range(8):
         try:
             max_req("POST", "/messages", params={"chat_id": MAX_CHAT_ID}, json=body)
             print("  MAX: опубликовано")
-            return
+            break
         except RuntimeError as e:
             if "not.ready" in str(e) and attempt < 7:
-                time.sleep(10)
+                time.sleep(delay)
+                delay = min(delay * 2, 30)
                 continue
             raise
+    if problems:
+        raise RuntimeError(f"пост ушёл без вложений: {', '.join(problems)}")
 
 
 def find_chats(obj, found):
