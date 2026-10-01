@@ -26,7 +26,7 @@ TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 TG_FILE = f"https://api.telegram.org/file/bot{TG_TOKEN}"
 VK_API = "https://api.vk.com/method"
 VK_V = "5.199"
-MAX_API = "https://platform-api.max.ru"
+MAX_API = os.environ.get("MAX_API", "").strip() or "https://platform-api.max.ru"
 
 TG_MAX_FILE = 20 * 1024 * 1024  # лимит Telegram на скачивание файлов ботом
 
@@ -174,12 +174,38 @@ def send_max(post, files):
             raise
 
 
+def find_chats(obj, found):
+    """Ищет все chat_id (и названия чатов) в ответе MAX."""
+    if isinstance(obj, dict):
+        cid = obj.get("chat_id")
+        if cid is not None:
+            found.setdefault(cid, obj.get("title") or "")
+        for v in obj.values():
+            find_chats(v, found)
+    elif isinstance(obj, list):
+        for v in obj:
+            find_chats(v, found)
+
+
 def max_list_chats():
-    chats = max_req("GET", "/chats").get("chats", [])
-    if not chats:
-        print("Бот не состоит ни в одном канале MAX. Добавьте его администратором канала.")
-    for c in chats:
-        print(f"MAX_CHAT_ID = {c.get('chat_id')}   ({c.get('type')}: {c.get('title')})")
+    """MAX больше не отдаёт список каналов бота, поэтому ловим события:
+    пока этот режим работает (~4 минуты), опубликуйте любой пост в канале MAX."""
+    print("Жду события от MAX около 4 минут.")
+    print("Сейчас опубликуйте любое сообщение в своём канале MAX (потом его можно удалить).")
+    found, marker, deadline = {}, None, time.time() + 240
+    while time.time() < deadline:
+        params = {"timeout": 30, "limit": 100}
+        if marker is not None:
+            params["marker"] = marker
+        data = max_req("GET", "/updates", params=params)
+        marker = data.get("marker", marker)
+        find_chats(data.get("updates", []), found)
+        if found:
+            break
+    if not found:
+        print("Событий не пришло. Проверьте, что бот — администратор канала, и запустите ещё раз.")
+    for cid, title in found.items():
+        print(f"MAX_CHAT_ID = {cid}   {title}")
 
 
 # ---------- Основной цикл ----------
