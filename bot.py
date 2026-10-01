@@ -15,12 +15,12 @@ import time
 
 import requests
 
-TG_TOKEN = os.environ.get("TG_TOKEN", "")
-TG_CHANNEL = os.environ.get("TG_CHANNEL", "")      # необязательно: @username или id канала
-VK_TOKEN = os.environ.get("VK_TOKEN", "")
-VK_GROUP_ID = os.environ.get("VK_GROUP_ID", "")    # число без минуса
-MAX_TOKEN = os.environ.get("MAX_TOKEN", "")
-MAX_CHAT_ID = os.environ.get("MAX_CHAT_ID", "")
+TG_TOKEN = os.environ.get("TG_TOKEN", "").strip()
+TG_CHANNEL = os.environ.get("TG_CHANNEL", "").strip()      # необязательно: @username или id канала
+VK_TOKEN = os.environ.get("VK_TOKEN", "").strip()
+VK_GROUP_ID = os.environ.get("VK_GROUP_ID", "").strip()    # число без минуса
+MAX_TOKEN = os.environ.get("MAX_TOKEN", "").strip()
+MAX_CHAT_ID = os.environ.get("MAX_CHAT_ID", "").strip()
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 TG_FILE = f"https://api.telegram.org/file/bot{TG_TOKEN}"
